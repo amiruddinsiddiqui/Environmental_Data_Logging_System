@@ -1,12 +1,8 @@
 #include "stm32f4xx.h"
-#include "clockconfig.h"
+
+#include "../Application/app.h"
 
 
 int main(void) {
-
-	SysClockConfig();
-
-	while(1) {
-
-	}
+	app();
 }
