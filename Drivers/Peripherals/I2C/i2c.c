@@ -8,7 +8,7 @@
 
 #include "stm32f4xx.h"
 #include "i2c.h"
-
+#include "dma.h"
 
 
 
@@ -32,7 +32,8 @@ static void gpio_i2c_init(void) {
 	GPIOB->OSPEEDR &= ~((3U<<(2*8)) | (3U<<(2*9)));
 	GPIOB->OSPEEDR |= ((1U << (2*8)) | (1U << (2*9))); // 01: Medium speed output switching
 
-	GPIOB->PUPDR &= ~((3U << (2*8)) | (3U << (2*9))); // 00: No pull-up, pull-down
+	GPIOB->PUPDR &= ~((3U << (2*8)) | (3U << (2*9)));
+	GPIOB->PUPDR |=  ((1U << (2*8)) | (1U << (2*9))); // 01: Pull-up
 
 	GPIOB->AFR[1] &= ~((15U << 0) | (15U << 4));
 	GPIOB->AFR[1] |= ((4U << 0) | (4U << 4));
@@ -47,9 +48,9 @@ void i2c_init(void) {
 	I2C1->CR1 |= I2C_CR1_SWRST;  // 1: I2C Peripheral under reset state
 	I2C1->CR1 &= ~I2C_CR1_SWRST; // 0: I2C Peripheral not under reset
 
-	I2C1->CR2 |=  (42U << 0); // I2C INPUT CLK FREQ -> 42MHz
+	I2C1->CR2 =  (42U << 0U); // I2C INPUT CLK FREQ -> 42MHz
 
-	I2C1->CCR &= (1U << 15);  // 0: standard mode I2C
+	I2C1->CCR &= ~(1U << 15);  // 0: standard mode I2C
 
 	/*
 	CCR = ( T_r(scl) + T_w(sclh) ) / T_pclk1
@@ -59,7 +60,7 @@ void i2c_init(void) {
 	// CCR determines SCL frequency by dividing the APB1 clock
 	// f_SCL = PCLK1 / (2 * CCR)         // f_scl = frequency_scl
 	// f_SCL = 42 MHz / (2 * 210) = 100 kHz
-	I2C1->CCR |= (210U << 0);
+	I2C1->CCR = (210U << 0);
 
 
 
@@ -74,11 +75,11 @@ void i2c_init(void) {
 	 * Maximum allowed rise time in Standard Mode = 1000 ns (1 us)
 	 * The 1 us rise time is part of the 10 us clock period
 	 */
-	I2C1->TRISE |= 43<<0; // 43 is equivalent to 1000ns which is the max rise time for i2c standard mode comm
+	I2C1->TRISE = 43<<0U; // 43 is equivalent to 1000ns which is the max rise time for i2c standard mode comm
 
 	I2C1->CR1 |= I2C_CR1_PE; // 1: Peripheral enable
-}
 
+}
 
 
 void i2c_start(void) {
@@ -89,8 +90,11 @@ void i2c_start(void) {
 	while(!(I2C1->SR1 & I2C_SR1_SB));
 }
 
+
 void i2c_stop(void) {
 	I2C1->CR1 |= I2C_CR1_STOP;
+
+	while (I2C1->CR1 & I2C_CR1_STOP);
 }
 
 void i2c_address(uint8_t addr) {
@@ -101,6 +105,7 @@ void i2c_address(uint8_t addr) {
 	temp = I2C1->SR1;  // read SR1 first (required to clear ADDR)
 	temp = I2C1->SR2;  // read SR2 next; ADDR flag is now cleared
 }
+
 
 void i2c_write(uint8_t data) {
 	while(!(I2C1->SR1 & I2C_SR1_TXE)); // TxE: Data register empty (transmitters)
@@ -133,7 +138,6 @@ void i2c_read(uint8_t address, uint8_t *buffer, uint8_t size) {
 			while(!(I2C1->SR1 & I2C_SR1_RXNE)); // wait until RxNE is set, RxNE : 1 -> Data register not empty aka data received
 
 			buffer[size - remaining] = I2C1->DR;
-			I2C1->CR1 |= I2C_CR1_ACK; // send ACK to the slave
 			remaining--;
 		}
 
@@ -153,7 +157,21 @@ void i2c_read(uint8_t address, uint8_t *buffer, uint8_t size) {
 
 
 
+void i2c_read_dma(uint8_t address, uint8_t *buffer, uint8_t size) {
+    I2C1->CR1 |= I2C_CR1_ACK;
+
+    dma_rx_done = 0;
+
+    dma_config((uint32_t)&I2C1->DR,
+               (uint32_t)buffer,
+               size);
+
+    // enable LAST and DMA requests
+    I2C1->CR2 |= I2C_CR2_LAST;
+    I2C1->CR2 |= I2C_CR2_DMAEN;
 
 
+    i2c_address(address);
 
+}
 

@@ -16,6 +16,7 @@ void i2c_stop(void);
 void i2c_address(uint8_t addr);
 void i2c_write(uint8_t data);
 void i2c_read(uint8_t address, uint8_t *buffer, uint8_t size);
+void i2c_read_dma(uint8_t address, uint8_t *buffer, uint8_t size);
 
 
 #endif /* PERIPHERALS_I2C_I2C_H_ */
