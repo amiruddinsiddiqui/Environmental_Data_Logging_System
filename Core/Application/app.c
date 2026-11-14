@@ -22,36 +22,49 @@
 
 
 
+
+UART_Config_t usart2_config = {
+		.instance = USART2,
+		.baudrate = 115200U
+};
+
+UART_Config_t usart1_config = {
+		.instance = USART1,
+		.baudrate = 115200U
+};
+
 volatile uint8_t bmp280_in_progress = 0;
-volatile uint8_t seconds_count = 0;
 
 void app(void) {
-
     // initialize hardware peripherals
-    i2c_init();
-    dma_init();
-    spi_init();
-    uart_init();
+    // PA3  -> USART2_ RX  // PA2  -> USART2_ TX
+    uart_init(&usart2_config, 3, 2);
+
+    i2c1_init();
+    dma1_init();
+    spi2_init();
     bmp280_init();
 
-    timer_init();
+    tim2_init();
 
-	uart_print("[BOOT] System initialized\r\n");
+    // PA10 -> USART1_ RX  // PA9  -> USART1_ TX
+    uart_init(&usart1_config, 10, 9);
 
 	SD_Card_Init();
 
+	printf("[BOOT] System initialized\r\n");
+	uart_tx(&usart2_config, 'A');
+	uart_tx(&usart2_config, '\r');
+	uart_tx(&usart2_config, '\n');
+
 	 while (1) {
 		// schedule BMP280 every 5 seconds
-		if (timer_1s_flag && !bmp280_in_progress) {
-			timer_1s_flag = 0;
-			seconds_count++;
+		if (timer_5s_flag && !bmp280_in_progress) {
+			timer_5s_flag = 0;
+			dma_rx_done = 0;
+			bmp280_in_progress = 1;
 
-			if (seconds_count >= 5) {
-				seconds_count = 0;
-				dma_rx_done = 0;
-				bmp280_read_measurements();
-				bmp280_in_progress = 1;
-			}
+			bmp280_read_measurements();
 		}
 
 		// process completed DMA reception
@@ -64,10 +77,8 @@ void app(void) {
 			double temperature = bmp280_compensate_T_double();
 			double pressure = bmp280_compensate_P_double();
 
-			uart_print_double(temperature);
-			uart_print(", ");
-			uart_print_double(pressure);
-			uart_print("\r\n");
+			printf("Temperature: %d C | Pressure: %d Pa\r\n",
+			       (int)temperature, (int)pressure);
 
 			// log data continuously to SD Card
 			SD_Log_Data(temperature, pressure);
@@ -77,7 +88,4 @@ void app(void) {
 	} // end of WHILE loop
 
 }
-
-
-
 
