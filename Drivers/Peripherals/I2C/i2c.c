@@ -10,6 +10,8 @@
 #include "i2c.h"
 #include "dma.h"
 
+#include "uart.h"
+#include <stdio.h>
 
 
 // I2C1_SCL -> PB8
@@ -33,14 +35,14 @@ static void gpio_i2c_init(void) {
 	GPIOB->OSPEEDR |= ((1U << (2*8)) | (1U << (2*9))); // 01: Medium speed output switching
 
 	GPIOB->PUPDR &= ~((3U << (2*8)) | (3U << (2*9)));
-	GPIOB->PUPDR |=  ((1U << (2*8)) | (1U << (2*9))); // 01: Pull-up
+	GPIOB->PUPDR |=  ((1U << (2*8)) | (1U << (2*9)));  // 01: Pull-up
 
 	GPIOB->AFR[1] &= ~((15U << 0) | (15U << 4));
 	GPIOB->AFR[1] |= ((4U << 0) | (4U << 4));
 
 }
 
-void i2c_init(void) {
+void i2c1_init(void) {
 	gpio_i2c_init();
 
 	RCC->APB1ENR |= RCC_APB1ENR_I2C1EN;
@@ -48,9 +50,9 @@ void i2c_init(void) {
 	I2C1->CR1 |= I2C_CR1_SWRST;  // 1: I2C Peripheral under reset state
 	I2C1->CR1 &= ~I2C_CR1_SWRST; // 0: I2C Peripheral not under reset
 
-	I2C1->CR2 =  (42U << 0U); // I2C INPUT CLK FREQ -> 42MHz
+	I2C1->CR2 =  (42U << 0U);    // I2C INPUT CLK FREQ -> 42MHz
 
-	I2C1->CCR &= ~(1U << 15);  // 0: standard mode I2C
+	I2C1->CCR &= ~(1U << 15);    // 0: standard mode I2C
 
 	/*
 	CCR = ( T_r(scl) + T_w(sclh) ) / T_pclk1
@@ -97,15 +99,41 @@ void i2c_stop(void) {
 	while (I2C1->CR1 & I2C_CR1_STOP);
 }
 
+//void i2c_address(uint8_t addr) {
+//	I2C1->DR = addr;
+//
+//	while(!(I2C1->SR1 & I2C_SR1_ADDR)); // wait until received address by slave is matched & acknowledges its address
+//
+//	uint32_t temp;
+//	temp = I2C1->SR1;  // read SR1 first (required to clear ADDR)
+//	temp = I2C1->SR2;  // read SR2 next; ADDR flag is now cleared
+//}
 void i2c_address(uint8_t addr) {
-	I2C1->DR = addr;
-	while(!(I2C1->SR1 & I2C_SR1_ADDR)); // wait until received address by slave is matched & acknowledges its address
+    I2C1->DR = addr;
 
-	uint32_t temp;
-	temp = I2C1->SR1;  // read SR1 first (required to clear ADDR)
-	temp = I2C1->SR2;  // read SR2 next; ADDR flag is now cleared
+    uint32_t timeout = 1000000U;
+
+    while (!(I2C1->SR1 & I2C_SR1_ADDR)) {
+        if (I2C1->SR1 & I2C_SR1_AF) {  // 1: AF -> Ack Failed/Nack
+            printf("[I2C ERROR] Address NACK: 0x%02X\r\n", addr);
+
+            I2C1->SR1 &= ~I2C_SR1_AF;
+            I2C1->CR1 |= I2C_CR1_STOP;
+            return;
+        }
+
+        if (timeout-- == 0U) {
+            printf("[I2C ERROR] Address timeout\r\n");
+
+            I2C1->CR1 |= I2C_CR1_STOP;
+            return;
+        }
+    }
+
+    // clear ADDR flag by read both SR registers
+    (void)I2C1->SR1;
+    (void)I2C1->SR2;
 }
-
 
 void i2c_write(uint8_t data) {
 	while(!(I2C1->SR1 & I2C_SR1_TXE)); // TxE: Data register empty (transmitters)

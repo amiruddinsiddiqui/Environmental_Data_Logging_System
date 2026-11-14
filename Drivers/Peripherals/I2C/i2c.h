@@ -10,7 +10,7 @@
 
 #include "stdint.h"
 
-void i2c_init(void);
+void i2c1_init(void);
 void i2c_start(void);
 void i2c_stop(void);
 void i2c_address(uint8_t addr);
