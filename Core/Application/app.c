@@ -20,7 +20,9 @@
 #include "sd_storage.h"
 #include "tim.h"
 
+#include "debug.h"
 
+#include "tftrender.h"
 
 
 UART_Config_t usart2_config = {
@@ -37,25 +39,36 @@ volatile uint8_t bmp280_in_progress = 0;
 
 void app(void) {
     // initialize hardware peripherals
-    // PA3  -> USART2_ RX  // PA2  -> USART2_ TX
-    uart_init(&usart2_config, 3, 2);
+
+	if(DEBUG) {
+		// PA3  -> USART2_ RX  // PA2  -> USART2_ TX
+		uart_init(&usart2_config, 3, 2);
+		LOG("[BOOT] USART2 initialized\r\n");
+	}
 
     i2c1_init();
+    LOG("[BOOT] I2C1 initialized\r\n");
     dma1_init();
+    LOG("[BOOT] DMA1 initialized\r\n");
     spi2_init();
+    LOG("[BOOT] SPI2 initialized\r\n");
     bmp280_init();
-
-    tim2_init();
+    LOG("[BOOT] BMP280 initialized\r\n");
 
     // PA10 -> USART1_ RX  // PA9  -> USART1_ TX
     uart_init(&usart1_config, 10, 9);
+    LOG("[BOOT] USART1 initialized\r\n");
 
 	SD_Card_Init();
+	LOG("[BOOT] SD CARD initialized\r\n");
 
-	printf("[BOOT] System initialized\r\n");
-	uart_tx(&usart2_config, 'A');
-	uart_tx(&usart2_config, '\r');
-	uart_tx(&usart2_config, '\n');
+	TFT_Display_Init();
+	LOG("[BOOT] ILI9341 Display initialized\r\n");
+
+	tim2_init();
+	LOG("[BOOT] TIM2 initialized\r\n");
+
+	LOG("[BOOT] System initialized\r\n");
 
 	 while (1) {
 		// schedule BMP280 every 5 seconds
@@ -77,15 +90,19 @@ void app(void) {
 			double temperature = bmp280_compensate_T_double();
 			double pressure = bmp280_compensate_P_double();
 
-			printf("Temperature: %d C | Pressure: %d Pa\r\n",
-			       (int)temperature, (int)pressure);
 
-			// log data continuously to SD Card
+			// log data continuously to SD Card every 5 seconds
 			SD_Log_Data(temperature, pressure);
+			TFT_Display_Update();
+
+			LOG("T: %s%d.%d C | P: %d.%d Pa\r\n", sign, t_whole, t_dec, p_whole, p_dec);
+
 		}
 
 
 	} // end of WHILE loop
 
 }
+
+
 
