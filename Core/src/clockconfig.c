@@ -10,11 +10,17 @@
 
 
 
-#define PLLM        4
-#define PLLN        84U
-#define PLLP        0 // 00 -> 2
+#define PLLM        8U
+#define PLLN        336U
+#define PLLP  		1U  // 01 = divide by 4
+#define PLLQ  		7U
+
+
 
 void SysClockConfig(void) {
+	// Enable HSE bypass for external 8 MHz clock from ST-LINK MCO
+	RCC->CR |= RCC_CR_HSEBYP;
+
 	// Turns on the external high-speed oscillator, which provides 8 MHz HSE clock.
 	// ENABLE HSE and wait for the HSE to become Ready
 	RCC->CR |= RCC_CR_HSEON;
@@ -39,12 +45,19 @@ void SysClockConfig(void) {
 	while (RCC->CR & RCC_CR_PLLRDY);
 
 	// Configure the MAIN PLL
-	RCC->PLLCFGR &= ~((0x3FU) | (0x1FFU << 6));
+//	RCC->PLLCFGR &= ~((0x3FU) | (0x1FFU << 6));
+	RCC->PLLCFGR &= ~((0x3FU)       |  // PLLM
+	                  (0x1FFU << 6) |  // PLLN
+	                  (3U << 16)    |  // PLLP
+	                  (0xFU << 24)  |  // PLLQ
+	                  RCC_PLLCFGR_PLLSRC);
+
 	RCC->PLLCFGR |= (PLLM << 0);
 	RCC->PLLCFGR |= (PLLN << 6);
 
-	RCC->PLLCFGR &= ~(3U << 16);
+//	RCC->PLLCFGR &= ~(3U << 16);
 	RCC->PLLCFGR |= (PLLP << 16);
+	RCC->PLLCFGR |= (PLLQ << 24);
 	RCC->PLLCFGR |= RCC_PLLCFGR_PLLSRC_HSE; // 1: HSE oscillator clock selected as PLL input
 
 	// Enable the PLL and wait for it to become ready
