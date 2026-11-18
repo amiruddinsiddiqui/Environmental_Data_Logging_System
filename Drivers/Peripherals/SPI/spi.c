@@ -14,13 +14,25 @@
   SPI2_MISO -> PB14
   SPI2_MOSI -> PB15
   CS        -> PB1
+  DC        -> PB12
+  RESET     -> PB7
 */
 
 static void spi_gpio_init(void) {
 	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;
 
-	GPIOB->MODER &= ~(3U<<(2*1));
-	GPIOB->MODER |= (1U<<(2*1)); // CS selected as O/P mode
+    // configure CS (PB1), DC (PB12), RESET (PB7) as output
+    GPIOB->MODER &= ~((3U << (2U * 1U)) |
+                      (3U << (2U * 7U)) |
+                      (3U << (2U * 12U)));
+
+    GPIOB->MODER |=  ((1U << (2U * 1U)) |
+                      (1U << (2U * 7U)) |
+                      (1U << (2U * 12U)));
+
+    // set CS and RESET HIGH, DC LOW initially
+    GPIOB->BSRR = (1U << 1U) | (1U << 7U) | (1U << (12U + 16U));
+
 
 	GPIOB->MODER &= ~((3U<<(2*13)) |
 					  (3U<<(2*14)) |
@@ -57,6 +69,8 @@ void spi2_init(void) {
 	RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;
 
 	SPI2->CR1 &= ~SPI_CR1_BR;       // 000: fPCLK/2 -> 42/2 = 21MHz
+	SPI2->CR1 |= SPI_CR1_BR_1;
+
 	SPI2->CR1 &= ~SPI_CR1_CPHA;     // 0: The first clock transition is the first data capture edge
 	SPI2->CR1 &= ~SPI_CR1_CPOL;     // 0: CK to 0 when idle
 	SPI2->CR1 &= ~SPI_CR1_DFF;      // 0: 8-bit data frame format is selected for tx/rx
@@ -64,15 +78,17 @@ void spi2_init(void) {
 	SPI2->CR1 &= ~SPI_CR1_RXONLY;   // 0: RXONLY -> FULL DUPLEX(Tx & Rx)
 	SPI2->CR1 |= SPI_CR1_MSTR;      // 1: Master configuration -> MCU as Master/Controller
 
+	SPI2->CR1 |= SPI_CR1_SSM;    // Software slave management
+	SPI2->CR1 |= SPI_CR1_SSI;    // Internal NSS high
 
 	SPI2->CR1 |= SPI_CR1_SPE;       // 1: Peripheral enabled
 }
 
 void spi_cs(uint8_t state) {
 	if(state) {
-		GPIOB->BSRR |= (1U << 1U);        // cs high -> stop communication with slave
+		GPIOB->BSRR = (1U << 1U);        // cs high -> stop communication with slave
 	} else {
-		GPIOB->BSRR |= (1U << (1U+16U));  // cs low  -> start communication with slave
+		GPIOB->BSRR = (1U << (1U+16U));  // cs low  -> start communication with slave
 	}
 }
 
@@ -88,6 +104,7 @@ uint8_t spi_tx_n_rx(uint8_t data) {
 	while(!(SPI2->SR & SPI_SR_RXNE)); // wait untile Rx buffer not empty bit is set(1) ie data is received
 	return (uint8_t)SPI2->DR;
 }
+
 
 
 //// MOSI -> Transmitter
