@@ -8,6 +8,7 @@
 #include "stm32f4xx.h"
 #include "uart.h"
 #include "stdio.h"
+#include "sd_storage.h"
 
 
 #define PCLK1		  42000000U
@@ -94,4 +95,19 @@ void uart_tx(UART_Config_t* config, uint8_t data) {
 	uart->DR = data;
 //	while(!(uart->SR & USART_SR_TC)); // wait until data frame transmission is complete
 }
+
+char tx_buffer[40];
+void uart_tx_multi_data(UART_Config_t *config) {
+
+    snprintf(tx_buffer, sizeof(tx_buffer),
+             "%s%d.%02d,%d.%02d\r\n",
+             sign, t_whole, t_dec, p_whole, p_dec);
+
+    for(uint8_t i = 0; tx_buffer[i] != '\0'; i++) {
+        uart_tx(config, (uint8_t)tx_buffer[i]);
+    }
+
+}
+
+
 

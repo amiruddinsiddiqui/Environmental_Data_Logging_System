@@ -95,6 +95,8 @@ void app(void) {
 			SD_Log_Data(temperature, pressure);
 			TFT_Display_Update();
 
+			uart_tx_multi_data(&usart1_config);
+
 			LOG("T: %s%d.%d C | P: %d.%d Pa\r\n", sign, t_whole, t_dec, p_whole, p_dec);
 
 		}
