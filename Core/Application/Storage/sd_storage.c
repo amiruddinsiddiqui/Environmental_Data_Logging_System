@@ -14,9 +14,18 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+#include "debug.h"
+
+
 static FATFS FatFs;
 static uint8_t sd_ready = 0;
 
+
+const char *sign;
+int t_whole;
+int t_dec;
+int p_whole;
+int p_dec;
 
 /* Initialize SD card and create CSV header */
 void SD_Card_Init(void) {
@@ -30,18 +39,18 @@ void SD_Card_Init(void) {
     FR_Status = f_mount(&FatFs, "", 1);
 
     if (FR_Status != FR_OK) {
-        printf("[ERROR] Mount failed: %d\r\n", FR_Status);
+        LOG("[ERROR] Mount failed: %d\r\n", FR_Status);
         return;
     }
 
-    printf("[INFO] SD Card mounted successfully\r\n");
+    LOG("[INFO] SD Card mounted successfully\r\n");
 
     /* Create file if it doesn't exist; preserve existing data */
     FR_Status = f_open(&Fil, "ENV_LOG.TXT",
                        FA_WRITE | FA_OPEN_ALWAYS);
 
     if (FR_Status != FR_OK) {
-        printf("[ERROR] File open failed: %d\r\n", FR_Status);
+        LOG("[ERROR] File open failed: %d\r\n", FR_Status);
         return;
     }
 
@@ -52,24 +61,24 @@ void SD_Card_Init(void) {
         FR_Status = f_write(&Fil, header, sizeof(header) - 1, &WWC);
 
         if (FR_Status != FR_OK || WWC != sizeof(header) - 1) {
-            printf("[ERROR] Header write failed\r\n");
+            LOG("[ERROR] Header write failed\r\n");
             f_close(&Fil);
             return;
         }
 
-        printf("[INFO] CSV header written\r\n");
+        LOG("[INFO] CSV header written\r\n");
     }
 
     FR_Status = f_close(&Fil);
 
     if (FR_Status != FR_OK) {
-        printf("[ERROR] File close failed\r\n");
+        LOG("[ERROR] File close failed\r\n");
         return;
     }
 
     sd_ready = 1;
 
-    printf("[INFO] SD logging ready\r\n");
+    LOG("[INFO] SD logging ready\r\n");
 }
 
 
@@ -79,7 +88,7 @@ void SD_Log_Data(double temperature, double pressure) {
     UINT WWC = 0;
     FRESULT FR_Status;
 
-    char log_buffer[100];
+    char log_buffer[50];
 
     if (!sd_ready)
         return;
@@ -88,17 +97,23 @@ void SD_Log_Data(double temperature, double pressure) {
     int t_scaled = (int)(temperature * 100);
     int p_scaled = (int)(pressure * 100);
 
-    const char *sign = (t_scaled < 0) ? "-" : "";
+    sign = (t_scaled < 0) ? "-" : "";
+
+    t_whole = abs(t_scaled / 100);
+    t_dec   = abs(t_scaled % 100);
+
+    p_whole = p_scaled / 100;
+    p_dec   = abs(p_scaled % 100);
 
     int len = snprintf(log_buffer, sizeof(log_buffer),
                        "%s%d.%02d, %d.%02d\r\n",
                        sign,
-                       abs(t_scaled / 100),
-                       abs(t_scaled % 100),
-                       p_scaled / 100,
-                       p_scaled % 100);
+                       t_whole,
+                       t_dec,
+                       p_whole,
+                       p_dec);
 
-    if (len <= 0 || len >= sizeof(log_buffer))
+    if (len <= 0 || len >= sizeof(log_buffer))  // check no. of char present in len
         return;
 
     /* Open existing file */
@@ -106,7 +121,7 @@ void SD_Log_Data(double temperature, double pressure) {
                        FA_OPEN_EXISTING | FA_WRITE);
 
     if (FR_Status != FR_OK) {
-        printf("[ERROR] Log file open failed: %d\r\n", FR_Status);
+        LOG("[ERROR] Log file open failed: %d\r\n", FR_Status);
         return;
     }
 
@@ -114,7 +129,7 @@ void SD_Log_Data(double temperature, double pressure) {
     FR_Status = f_lseek(&Fil, f_size(&Fil));
 
     if (FR_Status != FR_OK) {
-        printf("[ERROR] Seek failed: %d\r\n", FR_Status);
+        LOG("[ERROR] Seek failed: %d\r\n", FR_Status);
         f_close(&Fil);
         return;
     }
@@ -123,7 +138,7 @@ void SD_Log_Data(double temperature, double pressure) {
     FR_Status = f_write(&Fil, log_buffer, (UINT)len, &WWC);
 
     if (FR_Status != FR_OK || WWC != (UINT)len) {
-        printf("[ERROR] Data write failed: %d\r\n", FR_Status);
+        LOG("[ERROR] Data write failed: %d\r\n", FR_Status);
     }
 
     f_close(&Fil);

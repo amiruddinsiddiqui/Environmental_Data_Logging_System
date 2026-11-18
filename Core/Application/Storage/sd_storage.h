@@ -14,6 +14,12 @@
 #include <stdbool.h>
 
 
+extern const char *sign;
+extern int t_whole;
+extern int t_dec;
+extern int p_whole;
+extern int p_dec;
+
 void SD_Card_Init(void);
 void SD_Log_Data(double temperature, double pressure);
 
